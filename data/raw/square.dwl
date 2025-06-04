@@ -1,3 +1,0 @@
-welcome
-DESKTOP-U3VNNVB 
-04 June 2025  14:05:13
