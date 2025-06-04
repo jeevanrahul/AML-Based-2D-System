@@ -118,21 +118,22 @@ for entity in msp:
         angles = vertex_angles(points)
 
         poly_data = {
-            'points': points,
-            'num_points': len(points),
-            'edge_lengths': edges,
-            'area': area_val,
-            'perimeter': peri_val,
-            'aspect_ratio': aspect_ratio(points),
-            'vertex_angles': angles,
-            
-            'is_convex': is_convex(points),
-            'compactness': compactness(area_val, peri_val),
-            'bounding_box_area': bounding_box_area(points),
-            'centroid': centroid(points),
-            'acute_angle_count': count_acute_obtuse_angles(angles)[0],
-            'obtuse_angle_count': count_acute_obtuse_angles(angles)[1]
-        }
+            "points": [(float(x), float(y)) for x, y in points],
+            "num_points": int(len(points)),
+            "edge_lengths": [float(distance(points[i], points[(i + 1) % len(points)])) for i in range(len(points))],
+            "area": float(polygon_area(points)),
+            "perimeter": float(perimeter(points)),
+            "aspect_ratio": float(aspect_ratio(points)),
+            "vertex_angles": [float(a) for a in vertex_angles(points)],
+            "is_convex": bool(is_convex(points)),
+            "compactness": float(compactness(polygon_area(points), perimeter(points))),
+            "bounding_box_area": float(bounding_box_area(points)),
+            "centroid_x": float(centroid(points)[0]),
+            "centroid_y": float(centroid(points)[1]),
+            "acute_angle_count": int(count_acute_obtuse_angles(vertex_angles(points))[0]),
+            "obtuse_angle_count": int(count_acute_obtuse_angles(vertex_angles(points))[1]),
+}
+
         polylines_data.append(poly_data)
 
     elif entity.dxftype() == 'CIRCLE':
