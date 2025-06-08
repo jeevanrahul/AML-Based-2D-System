@@ -6,7 +6,7 @@ import joblib
 import os
 
 # Paths - update if needed
-data_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\processed_normalized\master_dataset.csv"
+data_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\master_dataset\master_dataset.csv"
 model_save_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\models"
 os.makedirs(model_save_path, exist_ok=True)
 
