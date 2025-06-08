@@ -19,11 +19,11 @@ df = pd.read_csv(data_path)
 
 # 2. Prepare features and labels
 # Assuming 'shape_name' column contains labels
-if 'shape_name' not in df.columns:
-    raise ValueError("Column 'shape_name' not found in dataset. Check your CSV.")
+if 'shape_type' not in df.columns:
+    raise ValueError("Column 'shape_type' not found in dataset. Check your CSV.")
 
-X = df.drop(columns=['shape_name'])
-y = df['shape_name']
+X = df.drop(columns=['shape_type'])
+y = df['shape_type']
 
 # 3. Split into train and test sets (80% train, 20% test)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
