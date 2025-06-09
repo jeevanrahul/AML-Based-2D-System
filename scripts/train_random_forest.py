@@ -26,7 +26,7 @@ X = df.drop(columns=['shape_type'])
 y = df['shape_type']
 
 # 3. Split into train and test sets (80% train, 20% test)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # 4. Initialize and train the Random Forest classifier
 model = RandomForestClassifier(n_estimators=100, random_state=42)
