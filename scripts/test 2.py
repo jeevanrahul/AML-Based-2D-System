@@ -205,17 +205,9 @@ def process_dxf_file(filepath, save_features_folder, save_norm_folder):
         print(f"No numeric features to normalize in {filepath}.")
         return
 
-    # Remove constant columns (where max == min)
-    numeric_df = numeric_df.loc[:, (numeric_df.max() != numeric_df.min())]
-
-    if numeric_df.empty:
-        print(f"All numeric features are constant in {filepath}. Skipping normalization.")
-        return
-
     scaler = MinMaxScaler()
     normalized_array = scaler.fit_transform(numeric_df)
     normalized_df = pd.DataFrame(normalized_array, columns=numeric_df.columns)
-
 
     normalized_file_path = os.path.join(save_norm_folder, f"normalized_{base_name}.csv")
     normalized_df.to_csv(normalized_file_path, index=False)
@@ -246,4 +238,3 @@ if __name__ == "__main__":
         print("Invalid folder path! Please enter a valid directory.")
     else:
         process_folder(folder_path)
-        

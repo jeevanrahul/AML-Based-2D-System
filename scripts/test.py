@@ -56,7 +56,6 @@ def is_convex(points):
     if n < 4:
         return True
     signs = []
-
     for i in range(n):
         dx1 = points[(i + 1) % n][0] - points[i][0]
         dy1 = points[(i + 1) % n][1] - points[i][1]
@@ -190,22 +189,19 @@ def process_dxf_file(filepath, save_features_folder, save_norm_folder):
         print(f"No shapes found in {filepath}. Skipping save.")
         return
 
-    # Base filename without extension
     base_name = os.path.splitext(os.path.basename(filepath))[0]
 
-    # Save extracted features CSV
     extracted_file_path = os.path.join(save_features_folder, f"features_{base_name}.csv")
     df = pd.DataFrame(all_shapes_data)
     df.to_csv(extracted_file_path, index=False)
     print(f"Extracted features saved at: {extracted_file_path}")
 
-    # Normalize numeric columns and save
     numeric_df = df.select_dtypes(include=[np.number]).copy()
+
     if numeric_df.empty:
         print(f"No numeric features to normalize in {filepath}.")
         return
 
-    # Remove constant columns (where max == min)
     numeric_df = numeric_df.loc[:, (numeric_df.max() != numeric_df.min())]
 
     if numeric_df.empty:
@@ -216,11 +212,9 @@ def process_dxf_file(filepath, save_features_folder, save_norm_folder):
     normalized_array = scaler.fit_transform(numeric_df)
     normalized_df = pd.DataFrame(normalized_array, columns=numeric_df.columns)
 
-
     normalized_file_path = os.path.join(save_norm_folder, f"normalized_{base_name}.csv")
     normalized_df.to_csv(normalized_file_path, index=False)
     print(f"Normalized features saved at: {normalized_file_path}")
-
 
 def process_folder(folder_path):
     save_features_folder = os.path.join(r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed", "processed_features")
@@ -246,4 +240,3 @@ if __name__ == "__main__":
         print("Invalid folder path! Please enter a valid directory.")
     else:
         process_folder(folder_path)
-        

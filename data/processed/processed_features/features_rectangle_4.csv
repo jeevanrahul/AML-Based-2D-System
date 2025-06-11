@@ -1,0 +1,2 @@
+points,num_points,edge_lengths,area,perimeter,aspect_ratio,vertex_angles,is_convex,compactness,bounding_box_area,centroid_x,centroid_y,acute_angle_count,obtuse_angle_count
+"[(4.71994588562984, 30.86795892578084), (64.71994588562984, 30.86795892578084), (64.71994588562984, 18.86795892578084), (4.71994588562984, 18.86795892578084)]",4,"[60.0, 12.0, 60.0, 12.0]",720.0,144.0,5.0,"[90.0, 90.0, 90.0, 90.0]",True,0.4363323129985824,720.0,34.71994588562984,24.86795892578084,0,0
