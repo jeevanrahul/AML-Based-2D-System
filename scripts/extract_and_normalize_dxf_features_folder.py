@@ -18,20 +18,14 @@ def polygon_area(points):
     return abs(area) / 2
 
 def perimeter(points):
-    n = len(points)
-    peri = 0
-    for i in range(n):
-        peri += distance(points[i], points[(i + 1) % n])
-    return peri
+    return sum(distance(points[i], points[(i + 1) % len(points)]) for i in range(len(points)))
 
 def aspect_ratio(points):
     xs = [p[0] for p in points]
     ys = [p[1] for p in points]
     width = max(xs) - min(xs)
     height = max(ys) - min(ys)
-    if height == 0:
-        return 0
-    return width / height
+    return 0 if height == 0 else width / height
 
 def vertex_angles(points):
     angles = []
@@ -40,36 +34,28 @@ def vertex_angles(points):
         p0 = np.array(points[i - 1])
         p1 = np.array(points[i])
         p2 = np.array(points[(i + 1) % n])
-
         v1 = p0 - p1
         v2 = p2 - p1
-
         cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         cos_angle = np.clip(cos_angle, -1.0, 1.0)
-
-        angle = np.arccos(cos_angle)
-        angles.append(np.degrees(angle))
+        angles.append(np.degrees(np.arccos(cos_angle)))
     return angles
 
 def is_convex(points):
-    n = len(points)
-    if n < 4:
+    if len(points) < 4:
         return True
     signs = []
-
-    for i in range(n):
-        dx1 = points[(i + 1) % n][0] - points[i][0]
-        dy1 = points[(i + 1) % n][1] - points[i][1]
-        dx2 = points[(i + 2) % n][0] - points[(i + 1) % n][0]
-        dy2 = points[(i + 2) % n][1] - points[(i + 1) % n][1]
+    for i in range(len(points)):
+        dx1 = points[(i + 1) % len(points)][0] - points[i][0]
+        dy1 = points[(i + 1) % len(points)][1] - points[i][1]
+        dx2 = points[(i + 2) % len(points)][0] - points[(i + 1) % len(points)][0]
+        dy2 = points[(i + 2) % len(points)][1] - points[(i + 1) % len(points)][1]
         cross = dx1 * dy2 - dy1 * dx2
         signs.append(cross > 0)
     return all(signs) or not any(signs)
 
 def compactness(area, perimeter):
-    if perimeter == 0:
-        return 0
-    return (4 * math.pi * area) / (perimeter ** 2)
+    return 0 if perimeter == 0 else (4 * math.pi * area) / (perimeter ** 2)
 
 def bounding_box_area(points):
     xs = [p[0] for p in points]
@@ -89,30 +75,26 @@ def count_acute_obtuse_angles(angles):
 def slope(start, end):
     dx = end[0] - start[0]
     dy = end[1] - start[1]
-    if dx == 0:
-        return float('inf')
-    return dy / dx
+    return float('inf') if dx == 0 else dy / dx
 
 def orientation_angle(start, end):
     dx = end[0] - start[0]
     dy = end[1] - start[1]
-    angle = math.degrees(math.atan2(dy, dx))
-    return angle % 360
+    return math.degrees(math.atan2(dy, dx)) % 360
 
-def process_dxf_file(filepath, save_features_folder, save_norm_folder):
+# Global storage
+extracted_dfs = []
+file_names = []
+
+def process_dxf_file(filepath, save_features_folder):
     print(f"\nProcessing: {filepath}")
     try:
         doc = ezdxf.readfile(filepath)
     except Exception as e:
         print(f"Failed to read {filepath}: {e}")
-        return
+        return None
 
     msp = doc.modelspace()
-
-    polylines_data = []
-    circles_data = []
-    lines_data = []
-    arcs_data = []
 
     for entity in msp:
         if entity.dxftype() == 'LWPOLYLINE':
@@ -121,106 +103,28 @@ def process_dxf_file(filepath, save_features_folder, save_norm_folder):
             peri_val = perimeter(points)
             angles = vertex_angles(points)
 
-            poly_data = {
-                "points": [(float(x), float(y)) for x, y in points],
-                "num_points": int(len(points)),
-                "edge_lengths": [float(distance(points[i], points[(i + 1) % len(points)])) for i in range(len(points))],
-                "area": float(area_val),
-                "perimeter": float(peri_val),
-                "aspect_ratio": float(aspect_ratio(points)),
-                "vertex_angles": [float(a) for a in angles],
-                "is_convex": bool(is_convex(points)),
-                "compactness": float(compactness(area_val, peri_val)),
-                "bounding_box_area": float(bounding_box_area(points)),
-                "centroid_x": float(centroid(points)[0]),
-                "centroid_y": float(centroid(points)[1]),
-                "acute_angle_count": int(count_acute_obtuse_angles(angles)[0]),
-                "obtuse_angle_count": int(count_acute_obtuse_angles(angles)[1]),
+            data = {
+                "num_points": len(points),
+                "area": area_val,
+                "perimeter": peri_val,
+                "aspect_ratio": aspect_ratio(points),
+                "is_convex": int(is_convex(points)),
+                "compactness": compactness(area_val, peri_val),
+                "bounding_box_area": bounding_box_area(points),
+                "centroid_x": centroid(points)[0],
+                "centroid_y": centroid(points)[1],
+                "acute_angle_count": count_acute_obtuse_angles(angles)[0],
+                "obtuse_angle_count": count_acute_obtuse_angles(angles)[1],
             }
-            polylines_data.append(poly_data)
+            df = pd.DataFrame([data])
+            base_name = os.path.splitext(os.path.basename(filepath))[0]
+            feature_path = os.path.join(save_features_folder, f"features_{base_name}.csv")
+            df.to_csv(feature_path, index=False)
+            print(f"Extracted features saved at: {feature_path}")
+            return df, base_name
 
-        elif entity.dxftype() == 'CIRCLE':
-            center = (entity.dxf.center[0], entity.dxf.center[1])
-            radius = entity.dxf.radius
-            circle_data = {
-                'center_x': float(center[0]),
-                'center_y': float(center[1]),
-                'radius': float(radius),
-                'diameter': 2 * radius,
-                'circumference': 2 * math.pi * radius,
-                'area': math.pi * radius ** 2
-            }
-            circles_data.append(circle_data)
-
-        elif entity.dxftype() == 'LINE':
-            start = (entity.dxf.start[0], entity.dxf.start[1])
-            end = (entity.dxf.end[0], entity.dxf.end[1])
-            length_val = distance(start, end)
-            line_data = {
-                'start_x': float(start[0]),
-                'start_y': float(start[1]),
-                'end_x': float(end[0]),
-                'end_y': float(end[1]),
-                'length': float(length_val),
-                'slope': float(slope(start, end)),
-                'orientation_angle': float(orientation_angle(start, end))
-            }
-            lines_data.append(line_data)
-
-        elif entity.dxftype() == 'ARC':
-            center = (entity.dxf.center[0], entity.dxf.center[1])
-            radius = entity.dxf.radius
-            start_angle = entity.dxf.start_angle
-            end_angle = entity.dxf.end_angle
-            angle_rad = math.radians(end_angle - start_angle)
-            arc_length = abs(radius * angle_rad)
-            arc_data = {
-                'center_x': float(center[0]),
-                'center_y': float(center[1]),
-                'radius': float(radius),
-                'start_angle': float(start_angle),
-                'end_angle': float(end_angle),
-                'arc_length': float(arc_length)
-            }
-            arcs_data.append(arc_data)
-
-    all_shapes_data = polylines_data + circles_data + lines_data + arcs_data
-
-    if not all_shapes_data:
-        print(f"No shapes found in {filepath}. Skipping save.")
-        return
-
-    # Base filename without extension
-    base_name = os.path.splitext(os.path.basename(filepath))[0]
-
-    # Save extracted features CSV
-    extracted_file_path = os.path.join(save_features_folder, f"features_{base_name}.csv")
-    df = pd.DataFrame(all_shapes_data)
-    df.to_csv(extracted_file_path, index=False)
-    print(f"Extracted features saved at: {extracted_file_path}")
-
-    # Normalize numeric columns and save
-    numeric_df = df.select_dtypes(include=[np.number]).copy()
-    if numeric_df.empty:
-        print(f"No numeric features to normalize in {filepath}.")
-        return
-
-    # Remove constant columns (where max == min)
-    numeric_df = numeric_df.loc[:, (numeric_df.max() != numeric_df.min())]
-
-    if numeric_df.empty:
-        print(f"All numeric features are constant in {filepath}. Skipping normalization.")
-        return
-
-    scaler = MinMaxScaler()
-    normalized_array = scaler.fit_transform(numeric_df)
-    normalized_df = pd.DataFrame(normalized_array, columns=numeric_df.columns)
-
-
-    normalized_file_path = os.path.join(save_norm_folder, f"normalized_{base_name}.csv")
-    normalized_df.to_csv(normalized_file_path, index=False)
-    print(f"Normalized features saved at: {normalized_file_path}")
-
+    print(f"No valid shapes found in {filepath}.")
+    return None
 
 def process_folder(folder_path):
     save_features_folder = os.path.join(r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed", "processed_features")
@@ -236,9 +140,43 @@ def process_folder(folder_path):
         print("No DXF files found in the folder.")
         return
 
+    global extracted_dfs, file_names
+    extracted_dfs = []
+    file_names = []
+
     for dxf_file in dxf_files:
         full_path = os.path.join(folder_path, dxf_file)
-        process_dxf_file(full_path, save_features_folder, save_norm_folder)
+        result = process_dxf_file(full_path, save_features_folder)
+        if result:
+            df, base_name = result
+            extracted_dfs.append(df)
+            file_names.append(base_name)
+
+    if not extracted_dfs:
+        print("No features extracted from any files.")
+        return
+
+    # Combine all data
+    combined_df = pd.concat(extracted_dfs, ignore_index=True)
+    numeric_df = combined_df.select_dtypes(include=[np.number]).copy()
+
+    # Remove constant columns
+    numeric_df = numeric_df.loc[:, (numeric_df.max() != numeric_df.min())]
+    if numeric_df.empty:
+        print("All numeric features are constant. Skipping normalization.")
+        return
+
+    # Normalize
+    scaler = MinMaxScaler()
+    normalized_array = scaler.fit_transform(numeric_df)
+    normalized_df = pd.DataFrame(normalized_array, columns=numeric_df.columns)
+
+    # Save normalized rows into their respective files
+    for i, base_name in enumerate(file_names):
+        out_df = normalized_df.iloc[[i]].reset_index(drop=True)
+        out_path = os.path.join(save_norm_folder, f"normalized_{base_name}.csv")
+        out_df.to_csv(out_path, index=False)
+        print(f"Normalized features saved at: {out_path}")
 
 if __name__ == "__main__":
     folder_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\raw"
@@ -246,4 +184,3 @@ if __name__ == "__main__":
         print("Invalid folder path! Please enter a valid directory.")
     else:
         process_folder(folder_path)
-        
