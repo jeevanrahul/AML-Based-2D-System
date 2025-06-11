@@ -99,6 +99,19 @@ def process_dxf_file(filepath, save_features_folder):
     for entity in msp:
         if entity.dxftype() == 'LWPOLYLINE':
             points = [(point[0], point[1]) for point in entity.get_points()]
+            
+        elif entity.dxftype() == 'CIRCLE':
+            center = entity.dxf.center
+            radius = entity.dxf.radius
+            points = [] 
+            for i in range(36):  # approximate circle with 36 points
+                angle = 2 * math.pi * i / 36
+                x = center[0] + radius * math.cos(angle)
+                y = center[1] + radius * math.sin(angle)
+                points.append((x, y))
+            
+        if points:
+            
             area_val = polygon_area(points)
             peri_val = perimeter(points)
             angles = vertex_angles(points)
