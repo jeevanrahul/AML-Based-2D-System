@@ -5,6 +5,7 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from sklearn.preprocessing import LabelEncoder
 import joblib
+from sklearn.preprocessing import MinMaxScaler
 
 def main():
     # Paths
@@ -44,10 +45,16 @@ def main():
     print(classification_report(y_test, y_pred, target_names=le.classes_))
 
     # 7. Save model & encoder
+    # Initialize the scaler
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X)
+
     joblib.dump(model, os.path.join(model_save_path, "random_forest_model.pkl"))
     joblib.dump(le, os.path.join(model_save_path, "label_encoder.pkl"))
+    joblib.dump(scaler, os.path.join(model_save_path, "minmax_scaler.pkl"))
     print(f"\n✅ Model saved at: {model_save_path}\\random_forest_model.pkl")
     print(f"✅ Label encoder saved at: {model_save_path}\\label_encoder.pkl")
+    print("✅ Scaler saved at:", os.path.join(model_save_path, "minmax_scaler.pkl"))
 
     # 8. Optional: Feature importances
     importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
