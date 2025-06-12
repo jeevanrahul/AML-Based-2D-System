@@ -34,5 +34,5 @@ def clean_data(input_path=r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-Sys
 
 # ✅ Make sure this line is present so it runs!
 if __name__ == "__main__":
-    clean_data(output_path=r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\cleaned_master_data.csv")
+    clean_data(output_path=r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\master_dataset\cleaned_master_data.csv")
 

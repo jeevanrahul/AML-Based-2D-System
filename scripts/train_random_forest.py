@@ -8,7 +8,7 @@ import joblib
 
 def main():
     # Paths
-    data_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\master_dataset\master_dataset.csv"
+    data_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\master_dataset\cleaned_master_data.csv"
     model_save_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\models"
     os.makedirs(model_save_path, exist_ok=True)
 
