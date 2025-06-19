@@ -44,6 +44,8 @@ def vertex_angles(points):
 def is_convex(points):
     if len(points) < 4:
         return True
+    if not points:
+        return False
     signs = []
     for i in range(len(points)):
         dx1 = points[(i + 1) % len(points)][0] - points[i][0]
@@ -72,16 +74,6 @@ def count_acute_obtuse_angles(angles):
     obtuse = sum(1 for a in angles if a > 90)
     return acute, obtuse
 
-def slope(start, end):
-    dx = end[0] - start[0]
-    dy = end[1] - start[1]
-    return float('inf') if dx == 0 else dy / dx
-
-def orientation_angle(start, end):
-    dx = end[0] - start[0]
-    dy = end[1] - start[1]
-    return math.degrees(math.atan2(dy, dx)) % 360
-
 # Global storage
 extracted_dfs = []
 file_names = []
@@ -95,23 +87,51 @@ def process_dxf_file(filepath, save_features_folder):
         return None
 
     msp = doc.modelspace()
+    points = None  # Ensure variable is always initialized
 
     for entity in msp:
+        points = None  # Reset for each entity
+
         if entity.dxftype() == 'LWPOLYLINE':
             points = [(point[0], point[1]) for point in entity.get_points()]
-            
+
         elif entity.dxftype() == 'CIRCLE':
             center = entity.dxf.center
             radius = entity.dxf.radius
-            points = [] 
-            for i in range(36):  # approximate circle with 36 points
+            points = []
+            for i in range(36):
                 angle = 2 * math.pi * i / 36
                 x = center[0] + radius * math.cos(angle)
                 y = center[1] + radius * math.sin(angle)
                 points.append((x, y))
-            
+
+        elif entity.dxftype() == 'ELLIPSE':
+            try:
+                center = entity.dxf.center
+                major_axis_vec = entity.dxf.major_axis
+                ratio = entity.dxf.ratio  # Correct attribute name
+                start_param = entity.dxf.start_param
+                end_param = entity.dxf.end_param
+
+                major_length = math.hypot(major_axis_vec[0], major_axis_vec[1])
+                angle = math.atan2(major_axis_vec[1], major_axis_vec[0])
+
+                points = []
+                num_points = 36
+                for i in range(num_points):
+                    t = start_param + (end_param - start_param) * i / (num_points - 1)
+                    x = major_length * math.cos(t)
+                    y = major_length * ratio * math.sin(t)
+
+                    x_rot = x * math.cos(angle) - y * math.sin(angle)
+                    y_rot = x * math.sin(angle) + y * math.cos(angle)
+
+                    points.append((x_rot + center[0], y_rot + center[1]))
+            except Exception as e:
+                print(f"Failed to process ellipse in {filepath}: {e}")
+                continue
+
         if points:
-            
             area_val = polygon_area(points)
             peri_val = perimeter(points)
             angles = vertex_angles(points)
@@ -129,6 +149,7 @@ def process_dxf_file(filepath, save_features_folder):
                 "acute_angle_count": count_acute_obtuse_angles(angles)[0],
                 "obtuse_angle_count": count_acute_obtuse_angles(angles)[1],
             }
+
             df = pd.DataFrame([data])
             base_name = os.path.splitext(os.path.basename(filepath))[0]
             feature_path = os.path.join(save_features_folder, f"features_{base_name}.csv")
@@ -169,7 +190,6 @@ def process_folder(folder_path):
         print("No features extracted from any files.")
         return
 
-    # Combine all data
     combined_df = pd.concat(extracted_dfs, ignore_index=True)
     numeric_df = combined_df.select_dtypes(include=[np.number]).copy()
 
@@ -184,7 +204,6 @@ def process_folder(folder_path):
     normalized_array = scaler.fit_transform(numeric_df)
     normalized_df = pd.DataFrame(normalized_array, columns=numeric_df.columns)
 
-    # Save normalized rows into their respective files
     for i, base_name in enumerate(file_names):
         out_df = normalized_df.iloc[[i]].reset_index(drop=True)
         out_path = os.path.join(save_norm_folder, f"normalized_{base_name}.csv")
