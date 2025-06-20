@@ -1,0 +1,2 @@
+num_points,area,perimeter,aspect_ratio,is_convex,compactness,bounding_box_area,centroid_x,centroid_y,acute_angle_count,obtuse_angle_count
+36,2112.951025851208,163.15555042361612,1.0,1,0.9974602317917256,2704.0,1.9737298215558337e-16,2.713878504639272e-16,0,36
