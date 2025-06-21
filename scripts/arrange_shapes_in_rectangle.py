@@ -1,0 +1,86 @@
+import ezdxf
+
+FILENAME = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\test case\sample_shapes_in_box.dxf"
+OUTPUT = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\test output\shapes_inside_rectangle_arranged.dxf"
+SPACING = 4
+
+# Read DXF file
+doc = ezdxf.readfile(FILENAME)
+msp = doc.modelspace()
+
+# Parse all shapes and get their dimensions
+boundary = None
+shapes = []
+
+for entity in msp:
+    if entity.dxftype() == "LWPOLYLINE" and entity.closed:
+        pts = list(entity.get_points())
+        if len(pts) == 5:  # likely rectangle
+            xs = [p[0] for p in pts]
+            ys = [p[1] for p in pts]
+            w = max(xs) - min(xs)
+            h = max(ys) - min(ys)
+            if not boundary or w * h > boundary["width"] * boundary["height"]:
+                boundary = {
+                    "entity": entity,
+                    "x": min(xs),
+                    "y": min(ys),
+                    "width": w,
+                    "height": h
+                }
+            else:
+                shapes.append({
+                    "type": "rectangle",
+                    "width": w,
+                    "height": h
+                })
+    elif entity.dxftype() == "CIRCLE":
+        center = entity.dxf.center
+        r = entity.dxf.radius
+        shapes.append({
+            "type": "circle",
+            "radius": r,
+            "width": r * 2,
+            "height": r * 2
+        })
+
+# Clear old shapes (except boundary)
+for entity in list(msp):
+    if entity != boundary["entity"]:
+        msp.delete_entity(entity)
+
+# Arrange all shapes freshly
+current_x = boundary["x"] + SPACING
+current_y = boundary["y"] + SPACING
+row_max_height = 0
+
+for shape in shapes:
+    w, h = shape["width"], shape["height"]
+
+    if current_x + w + SPACING > boundary["x"] + boundary["width"]:
+        current_x = boundary["x"] + SPACING
+        current_y += row_max_height + SPACING
+        row_max_height = 0
+
+    if current_y + h + SPACING > boundary["y"] + boundary["height"]:
+        print("⚠️ Skipped shape — not enough vertical space")
+        continue
+
+    if shape["type"] == "circle":
+        center = (current_x + shape["radius"], current_y + shape["radius"])
+        msp.add_circle(center=center, radius=shape["radius"])
+    else:
+        msp.add_lwpolyline([
+            (current_x, current_y),
+            (current_x + w, current_y),
+            (current_x + w, current_y + h),
+            (current_x, current_y + h),
+            (current_x, current_y)
+        ], dxfattribs={"closed": True})
+
+    current_x += w + SPACING
+    row_max_height = max(row_max_height, h)
+
+# Save result
+doc.saveas(OUTPUT)
+print(f"✅ Successfully arranged and saved as: {OUTPUT}")
