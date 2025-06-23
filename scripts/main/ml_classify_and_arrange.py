@@ -7,11 +7,12 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
 # --- File Paths ---
-INPUT_DXF = r"data/raw/sample_test.dxf"
+INPUT_DXF = r"data/raw/shapes_inside_box/sample_shapes_in_box.dxf"
 OUTPUT_DXF = r"data/output/arranged_output.dxf"
 MODEL_PATH = r"models/random_forest_model.pkl"
 ENCODER_PATH = r"models/label_encoder.pkl"
 SCALER_PATH = r"models/minmax_scaler.pkl"
+FEATURE_COLUMNS_PATH = r"models/feature_columns.txt"
 
 SPACING = 4  # mm
 
@@ -40,7 +41,7 @@ def bounding_box(points):
 def get_circle_features(entity):
     center = entity.dxf.center
     radius = entity.dxf.radius
-    points = [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2*math.pi, 36)]
+    points = [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36)]
     return points
 
 def vertex_angles(points):
@@ -52,7 +53,8 @@ def vertex_angles(points):
         p2 = np.array(points[(i + 1) % n])
         v1 = p0 - p1
         v2 = p2 - p1
-        cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        denom = np.linalg.norm(v1) * np.linalg.norm(v2)
+        cos_angle = np.dot(v1, v2) / denom if denom != 0 else 1.0
         cos_angle = np.clip(cos_angle, -1.0, 1.0)
         angles.append(np.degrees(np.arccos(cos_angle)))
     return angles
@@ -99,7 +101,7 @@ def extract_features(entity):
     acute, obtuse = count_acute_obtuse_angles(angles)
     cx, cy = centroid(points)
 
-    feature_dict = {
+    return {
         "num_points": len(points),
         "area": area,
         "perimeter": peri,
@@ -111,18 +113,19 @@ def extract_features(entity):
         "compactness": compactness(area, peri),
         "acute_angle_count": acute,
         "obtuse_angle_count": obtuse,
-    }
-    return feature_dict, points
-
-    return feature_dict, points
+    }, points
 
 # --- Main Script ---
-print("🔄 Loading model and scaler...")
+print("\U0001F504 Loading model and scaler...")
 model = joblib.load(MODEL_PATH)
 encoder = joblib.load(ENCODER_PATH)
 scaler = joblib.load(SCALER_PATH)
 
-print("📂 Reading DXF:", INPUT_DXF)
+# Load expected feature columns
+with open(FEATURE_COLUMNS_PATH, "r") as f:
+    expected_cols = [line.strip() for line in f]
+
+print("\U0001F4C2 Reading DXF:", INPUT_DXF)
 doc = ezdxf.readfile(INPUT_DXF)
 msp = doc.modelspace()
 
@@ -147,18 +150,24 @@ for e in msp:
             shapes.append({"entity": e, "features": features, "points": points})
 
 if not boundary:
-    raise ValueError("❌ No rectangle boundary found!")
+    raise ValueError("\u274C No rectangle boundary found!")
 
 # --- Step 2: Predict shape types ---
 df = pd.DataFrame([s["features"] for s in shapes])
+
+# Reorder columns to match training
+for col in expected_cols:
+    if col not in df.columns:
+        df[col] = 0
+
+df = df[expected_cols]
 df_scaled = scaler.transform(df)
 preds = model.predict(df_scaled)
 labels = encoder.inverse_transform(preds)
 
-# Attach labels to shapes
 for shape, label in zip(shapes, labels):
     shape["label"] = label
-    print(f"🧠 Predicted shape: {label}")
+    print(f"\U0001F9E0 Predicted shape: {label}")
 
 # --- Step 3: Clear everything except boundary
 for e in list(msp):
@@ -175,20 +184,18 @@ for shape in shapes:
     w = max_x - min_x
     h = max_y - min_y
 
-    # Move to next row if width exceeded
     if x_cursor + w + SPACING > boundary["x"] + boundary["width"]:
         x_cursor = boundary["x"] + SPACING
         y_cursor += row_max_height + SPACING
         row_max_height = 0
 
     if y_cursor + h + SPACING > boundary["y"] + boundary["height"]:
-        print("⚠️ Not enough vertical space. Skipping shape.")
+        print("\u26A0\uFE0F Not enough vertical space. Skipping shape.")
         continue
 
     dx = x_cursor - min_x
     dy = y_cursor - min_y
 
-    # Redraw based on label
     if shape["label"] == "circle":
         r = w / 2
         msp.add_circle(center=(x_cursor + r, y_cursor + r), radius=r)
@@ -199,6 +206,6 @@ for shape in shapes:
     x_cursor += w + SPACING
     row_max_height = max(row_max_height, h)
 
-# --- Step 5: Save final output
+# --- Step 5: Save output ---
 doc.saveas(OUTPUT_DXF)
-print("✅ Done! Saved arranged file to:", OUTPUT_DXF)
+print("\u2705 Done! Saved arranged file to:", OUTPUT_DXF)
