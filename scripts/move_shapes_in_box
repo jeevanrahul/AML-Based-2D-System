@@ -1,23 +1,9 @@
 import ezdxf
-import math
 
+# Config
 FILENAME = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\sample_shapes_in_box.dxf"
 OUTPUT = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\test output\shapes_inside_rectangle_arranged.dxf"
-DEFAULT_SPACING = 4
-
-def detect_shape_type(polyline):
-    points = list(polyline.get_points())
-    count = len(points) - 1
-    if count == 3:
-        return "triangle"
-    elif count == 4:
-        return "rectangle"
-    elif count == 5:
-        return "pentagon"
-    elif count == 10:
-        return "star"
-    else:
-        return "polygon"
+SPACING = 4
 
 # Load DXF
 doc = ezdxf.readfile(FILENAME)
@@ -26,7 +12,7 @@ msp = doc.modelspace()
 boundary = None
 shapes = []
 
-# STEP 1: DETECT SHAPES
+# STEP 1: Extract boundary + valid shapes (rectangle, square, circle only)
 for entity in msp:
     if entity.dxftype() == "LWPOLYLINE" and entity.closed:
         pts = list(entity.get_points())
@@ -34,8 +20,8 @@ for entity in msp:
         ys = [p[1] for p in pts]
         w = max(xs) - min(xs)
         h = max(ys) - min(ys)
-        shape_type = detect_shape_type(entity)
-        if shape_type == "rectangle" and (not boundary or w * h > boundary["width"] * boundary["height"]):
+
+        if not boundary or w * h > boundary["width"] * boundary["height"]:
             boundary = {
                 "entity": entity,
                 "x": min(xs),
@@ -45,12 +31,11 @@ for entity in msp:
             }
         else:
             shapes.append({
-                "type": shape_type,
+                "type": "square" if abs(w - h) < 0.1 else "rectangle",
                 "width": w,
                 "height": h
             })
     elif entity.dxftype() == "CIRCLE":
-        center = entity.dxf.center
         r = entity.dxf.radius
         shapes.append({
             "type": "circle",
@@ -59,27 +44,26 @@ for entity in msp:
             "height": r * 2
         })
 
-# STEP 2: DELETE OLD SHAPES (except boundary)
+# STEP 2: Delete old shapes (except boundary)
 for entity in list(msp):
     if entity != boundary["entity"]:
         msp.delete_entity(entity)
 
-# STEP 3: ARRANGE SHAPES
-current_x = boundary["x"] + DEFAULT_SPACING
-current_y = boundary["y"] + DEFAULT_SPACING
+# STEP 3: Arrange shapes
+current_x = boundary["x"] + SPACING
+current_y = boundary["y"] + SPACING
 row_max_height = 0
-last_shape_type = None
 
 for shape in shapes:
     w, h = shape["width"], shape["height"]
 
-    if current_x + w + DEFAULT_SPACING > boundary["x"] + boundary["width"]:
-        current_x = boundary["x"] + DEFAULT_SPACING
-        current_y += row_max_height + DEFAULT_SPACING
+    if current_x + w + SPACING > boundary["x"] + boundary["width"]:
+        current_x = boundary["x"] + SPACING
+        current_y += row_max_height + SPACING
         row_max_height = 0
 
-    if current_y + h + DEFAULT_SPACING > boundary["y"] + boundary["height"]:
-        print("⚠️ Skipped shape — not enough vertical space")
+    if current_y + h + SPACING > boundary["y"] + boundary["height"]:
+        print(f"⚠️ Skipped shape {shape['type']} — no vertical space.")
         continue
 
     if shape["type"] == "circle":
@@ -94,10 +78,9 @@ for shape in shapes:
             (current_x, current_y)
         ], dxfattribs={"closed": True})
 
-    current_x += w + DEFAULT_SPACING
+    current_x += w + SPACING
     row_max_height = max(row_max_height, h)
-    last_shape_type = shape["type"]
 
-# SAVE FILE
+# STEP 4: Save file
 doc.saveas(OUTPUT)
-print(f"✅ Successfully arranged and saved to: {OUTPUT}")
+print(f"✅ Clean layout saved at: {OUTPUT}")
