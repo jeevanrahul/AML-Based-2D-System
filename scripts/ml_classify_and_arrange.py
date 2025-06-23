@@ -43,18 +43,61 @@ def get_circle_features(entity):
     points = [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2*math.pi, 36)]
     return points
 
+def vertex_angles(points):
+    angles = []
+    n = len(points)
+    for i in range(n):
+        p0 = np.array(points[i - 1])
+        p1 = np.array(points[i])
+        p2 = np.array(points[(i + 1) % n])
+        v1 = p0 - p1
+        v2 = p2 - p1
+        cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        cos_angle = np.clip(cos_angle, -1.0, 1.0)
+        angles.append(np.degrees(np.arccos(cos_angle)))
+    return angles
+
+def count_acute_obtuse_angles(angles):
+    acute = sum(1 for a in angles if a < 90)
+    obtuse = sum(1 for a in angles if a > 90)
+    return acute, obtuse
+
+def is_convex(points):
+    if len(points) < 4:
+        return True
+    signs = []
+    for i in range(len(points)):
+        dx1 = points[(i + 1) % len(points)][0] - points[i][0]
+        dy1 = points[(i + 1) % len(points)][1] - points[i][1]
+        dx2 = points[(i + 2) % len(points)][0] - points[(i + 1) % len(points)][0]
+        dy2 = points[(i + 2) % len(points)][1] - points[(i + 1) % len(points)][1]
+        cross = dx1 * dy2 - dy1 * dx2
+        signs.append(cross > 0)
+    return all(signs) or not any(signs)
+
+def compactness(area, perimeter):
+    return 0 if perimeter == 0 else (4 * math.pi * area) / (perimeter ** 2)
+
+def centroid(points):
+    xs = [p[0] for p in points]
+    ys = [p[1] for p in points]
+    return (sum(xs) / len(xs), sum(ys) / len(ys))
+
 def extract_features(entity):
     if entity.dxftype() == 'CIRCLE':
         points = get_circle_features(entity)
     elif entity.dxftype() == 'LWPOLYLINE':
         points = [(p[0], p[1]) for p in entity.get_points()]
     else:
-        return None, None  # Unsupported
+        return None, None
 
     area = polygon_area(points)
     peri = perimeter(points)
     asp = aspect_ratio(points)
     box_area = (max(p[0] for p in points) - min(p[0] for p in points)) * (max(p[1] for p in points) - min(p[1] for p in points))
+    angles = vertex_angles(points)
+    acute, obtuse = count_acute_obtuse_angles(angles)
+    cx, cy = centroid(points)
 
     feature_dict = {
         "num_points": len(points),
@@ -62,7 +105,15 @@ def extract_features(entity):
         "perimeter": peri,
         "aspect_ratio": asp,
         "bounding_box_area": box_area,
+        "centroid_x": cx,
+        "centroid_y": cy,
+        "is_convex": int(is_convex(points)),
+        "compactness": compactness(area, peri),
+        "acute_angle_count": acute,
+        "obtuse_angle_count": obtuse,
     }
+    return feature_dict, points
+
     return feature_dict, points
 
 # --- Main Script ---
