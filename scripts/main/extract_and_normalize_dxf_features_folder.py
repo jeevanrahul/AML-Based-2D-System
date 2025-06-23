@@ -211,7 +211,7 @@ def process_folder(folder_path):
         print(f"Normalized features saved at: {out_path}")
 
 if __name__ == "__main__":
-    folder_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\raw"
+    folder_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\raw\shapes_dataset"
     if not os.path.isdir(folder_path):
         print("Invalid folder path! Please enter a valid directory.")
     else:

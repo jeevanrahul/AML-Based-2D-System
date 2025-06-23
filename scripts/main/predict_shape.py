@@ -111,5 +111,5 @@ def predict_shape(dxf_file_path):
 # --- Example usage ---
 if __name__ == "__main__":
     # Change path below to any test .dxf file
-    test_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\raw\square_49.dxf"
+    test_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\raw\shapes_dataset\triangle_30.dxf"
     predict_shape(test_path)
