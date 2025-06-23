@@ -7,7 +7,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
 # --- File Paths ---
-INPUT_DXF = r"data/test case/sample_shapes_in_box.dxf"
+INPUT_DXF = r"data/raw/sample_test.dxf"
 OUTPUT_DXF = r"data/output/arranged_output.dxf"
 MODEL_PATH = r"models/random_forest_model.pkl"
 ENCODER_PATH = r"models/label_encoder.pkl"
@@ -52,8 +52,7 @@ def vertex_angles(points):
         p2 = np.array(points[(i + 1) % n])
         v1 = p0 - p1
         v2 = p2 - p1
-        denom = np.linalg.norm(v1) * np.linalg.norm(v2)
-        cos_angle = np.dot(v1, v2) / denom if denom != 0 else 1.0
+        cos_angle = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         cos_angle = np.clip(cos_angle, -1.0, 1.0)
         angles.append(np.degrees(np.arccos(cos_angle)))
     return angles
@@ -115,6 +114,8 @@ def extract_features(entity):
     }
     return feature_dict, points
 
+    return feature_dict, points
+
 # --- Main Script ---
 print("🔄 Loading model and scaler...")
 model = joblib.load(MODEL_PATH)
@@ -150,12 +151,6 @@ if not boundary:
 
 # --- Step 2: Predict shape types ---
 df = pd.DataFrame([s["features"] for s in shapes])
-expected_cols = scaler.feature_names_in_
-for col in expected_cols:
-    if col not in df.columns:
-        df[col] = 0
-df = df[expected_cols]
-
 df_scaled = scaler.transform(df)
 preds = model.predict(df_scaled)
 labels = encoder.inverse_transform(preds)
@@ -180,6 +175,7 @@ for shape in shapes:
     w = max_x - min_x
     h = max_y - min_y
 
+    # Move to next row if width exceeded
     if x_cursor + w + SPACING > boundary["x"] + boundary["width"]:
         x_cursor = boundary["x"] + SPACING
         y_cursor += row_max_height + SPACING
@@ -192,6 +188,7 @@ for shape in shapes:
     dx = x_cursor - min_x
     dy = y_cursor - min_y
 
+    # Redraw based on label
     if shape["label"] == "circle":
         r = w / 2
         msp.add_circle(center=(x_cursor + r, y_cursor + r), radius=r)
@@ -203,6 +200,5 @@ for shape in shapes:
     row_max_height = max(row_max_height, h)
 
 # --- Step 5: Save final output
-os.makedirs(os.path.dirname(OUTPUT_DXF), exist_ok=True)
 doc.saveas(OUTPUT_DXF)
 print("✅ Done! Saved arranged file to:", OUTPUT_DXF)
