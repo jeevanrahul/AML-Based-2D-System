@@ -2,7 +2,6 @@ num_points
 area
 perimeter
 aspect_ratio
-is_convex
 compactness
 bounding_box_area
 centroid_x

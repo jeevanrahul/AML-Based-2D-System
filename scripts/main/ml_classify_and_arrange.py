@@ -16,7 +16,7 @@ FEATURE_COLUMNS_PATH = r"models\feature_columns.txt"
 
 SPACING = 4  # mm
 
-# --- Feature Extraction Utilities ---
+# --- Utilities ---
 def distance(p1, p2):
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
 
@@ -41,8 +41,7 @@ def bounding_box(points):
 def get_circle_features(entity):
     center = entity.dxf.center
     radius = entity.dxf.radius
-    points = [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36)]
-    return points
+    return [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36)]
 
 def vertex_angles(points):
     angles = []
@@ -116,16 +115,15 @@ def extract_features(entity):
     }, points
 
 # --- Main Script ---
-print("\U0001F504 Loading model and scaler...")
+print("🔄 Loading model and scaler...")
 model = joblib.load(MODEL_PATH)
 encoder = joblib.load(ENCODER_PATH)
 scaler = joblib.load(SCALER_PATH)
 
-# Load expected feature columns
 with open(FEATURE_COLUMNS_PATH, "r") as f:
     expected_cols = [line.strip() for line in f]
 
-print("\U0001F4C2 Reading DXF:", INPUT_DXF)
+print("📂 Reading DXF:", INPUT_DXF)
 doc = ezdxf.readfile(INPUT_DXF)
 msp = doc.modelspace()
 
@@ -150,31 +148,33 @@ for e in msp:
             shapes.append({"entity": e, "features": features, "points": points})
 
 if not boundary:
-    raise ValueError("\u274C No rectangle boundary found!")
+    raise ValueError("❌ No rectangle boundary found!")
 
 # --- Step 2: Predict shape types ---
 df = pd.DataFrame([s["features"] for s in shapes])
-
-# Reorder columns to match training
 for col in expected_cols:
     if col not in df.columns:
         df[col] = 0
-
 df = df[expected_cols]
+
 df_scaled = scaler.transform(df)
 preds = model.predict(df_scaled)
 labels = encoder.inverse_transform(preds)
 
 for shape, label in zip(shapes, labels):
     shape["label"] = label
-    print(f"\U0001F9E0 Predicted shape: {label}")
+    print(f"🧠 Predicted shape: {label}")
 
-# --- Step 3: Clear everything except boundary
+df['predicted_label'] = labels
+df.to_csv("debug_features.csv", index=False)
+print("✅ Debug features saved at debug_features.csv")
+
+# --- Step 3: Clear all except boundary
 for e in list(msp):
     if e != boundary["entity"]:
         msp.delete_entity(e)
 
-# --- Step 4: Arrange shapes inside the box
+# --- Step 4: Arrange shapes inside box using original geometry ---
 x_cursor = boundary["x"] + SPACING
 y_cursor = boundary["y"] + SPACING
 row_max_height = 0
@@ -190,22 +190,18 @@ for shape in shapes:
         row_max_height = 0
 
     if y_cursor + h + SPACING > boundary["y"] + boundary["height"]:
-        print("\u26A0\uFE0F Not enough vertical space. Skipping shape.")
+        print("⚠️ Not enough vertical space. Skipping shape.")
         continue
 
     dx = x_cursor - min_x
     dy = y_cursor - min_y
 
-    if shape["label"] == "circle":
-        r = w / 2
-        msp.add_circle(center=(x_cursor + r, y_cursor + r), radius=r)
-    else:
-        new_pts = [(p[0] + dx, p[1] + dy) for p in shape["points"]]
-        msp.add_lwpolyline(new_pts, close=True)
+    new_pts = [(p[0] + dx, p[1] + dy) for p in shape["points"]]
+    msp.add_lwpolyline(new_pts, close=True)
 
     x_cursor += w + SPACING
     row_max_height = max(row_max_height, h)
 
 # --- Step 5: Save output ---
 doc.saveas(OUTPUT_DXF)
-print("\u2705 Done! Saved arranged file to:", OUTPUT_DXF)
+print("✅ Done! Saved arranged file to:", OUTPUT_DXF)
