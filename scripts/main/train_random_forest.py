@@ -9,8 +9,8 @@ from sklearn.preprocessing import MinMaxScaler
 
 def main():
     # Paths
-    data_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\data\processed\master_dataset\cleaned_master_data.csv"
-    model_save_path = r"C:\Users\welcome\Desktop\New folder\AML-Based-2D-System\models"
+    data_path = r"data\processed\master_dataset\cleaned_master_data.csv"
+    model_save_path = r"models"
     os.makedirs(model_save_path, exist_ok=True)
 
     # 1. Load the dataset
@@ -38,10 +38,10 @@ def main():
     # 6. Predict and evaluate
     y_pred = model.predict(X_test)
     accuracy = accuracy_score(y_test, y_pred)
-    print(f"✅ Model Accuracy: {accuracy:.4f}")
-    print("\n📊 Confusion Matrix:")
+    print(f":white_check_mark: Model Accuracy: {accuracy:.4f}")
+    print("\n:bar_chart: Confusion Matrix:")
     print(confusion_matrix(y_test, y_pred))
-    print("\n📄 Classification Report:")
+    print("\n:page_facing_up: Classification Report:")
     print(classification_report(y_test, y_pred, target_names=le.classes_))
 
     # 7. Save model & encoder
@@ -52,13 +52,18 @@ def main():
     joblib.dump(model, os.path.join(model_save_path, "random_forest_model.pkl"))
     joblib.dump(le, os.path.join(model_save_path, "label_encoder.pkl"))
     joblib.dump(scaler, os.path.join(model_save_path, "minmax_scaler.pkl"))
-    print(f"\n✅ Model saved at: {model_save_path}\\random_forest_model.pkl")
-    print(f"✅ Label encoder saved at: {model_save_path}\\label_encoder.pkl")
-    print("✅ Scaler saved at:", os.path.join(model_save_path, "minmax_scaler.pkl"))
+     # Save feature columns
+    feature_columns = list(X.columns)
+    with open(os.path.join(model_save_path, "feature_columns.txt"), "w") as f:
+        f.write("\n".join(feature_columns)) 
+    print(f"\n:white_check_mark: Model saved at: {model_save_path}\\random_forest_model.pkl")
+    print(f":white_check_mark: Label encoder saved at: {model_save_path}\\label_encoder.pkl")
+    print(":white_check_mark: Scaler saved at:", os.path.join(model_save_path, "minmax_scaler.pkl"))
+    print(f":white_check_mark: Feature columns saved at: {model_save_path}\\feature_columns.txt")
 
     # 8. Optional: Feature importances
     importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
-    print("\n🔥 Top 5 Important Features:")
+    print("\n:fire: Top 5 Important Features:")
     print(importances.head(5))
 
 if __name__ == "__main__":
