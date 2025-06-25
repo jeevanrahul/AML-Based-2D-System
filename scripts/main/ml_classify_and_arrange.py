@@ -7,12 +7,12 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
 # --- File Paths ---
-INPUT_DXF = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\data\raw\shapes_inside_box\sample_shapes_in_box.dxf"
-OUTPUT_DXF = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\data\output\classified_shapes.dxf"
-MODEL_PATH = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\models\random_forest_model.pkl"
-ENCODER_PATH = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\models\label_encoder.pkl"
-SCALER_PATH = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\models\minmax_scaler.pkl"
-FEATURE_COLUMNS_PATH = r"C:\jeev folder\jeevanrahul-AML-Based-2D-System-fcc6cdd\models\feature_columns.txt"
+INPUT_DXF = r"data\test case\sample_shapes_in_box.dxf"
+OUTPUT_DXF = r"data\output\sample_output.dxf"
+MODEL_PATH = r"models\random_forest_model.pkl"
+ENCODER_PATH = r"models\label_encoder.pkl"
+SCALER_PATH = r"models\minmax_scaler.pkl"
+FEATURE_COLUMNS_PATH = r"models\feature_columns.txt"
 
 SPACING = 4  # mm
 
