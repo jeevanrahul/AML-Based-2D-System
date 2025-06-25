@@ -1,13 +1,12 @@
 import ezdxf
 import joblib
-import os
 import math
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
 # --- File Paths ---
-INPUT_DXF = r"data\test case\sample_shapes_in_box.dxf"
+INPUT_DXF = r"data\raw\shapes_inside_box\own.dxf"
 OUTPUT_DXF = r"data\output\sample_output.dxf"
 MODEL_PATH = r"models\random_forest_model.pkl"
 ENCODER_PATH = r"models\label_encoder.pkl"
@@ -16,7 +15,7 @@ FEATURE_COLUMNS_PATH = r"models\feature_columns.txt"
 
 SPACING = 4  # mm
 
-# --- Utilities ---
+# --- Geometry Utilities ---
 def distance(p1, p2):
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
 
@@ -38,10 +37,13 @@ def bounding_box(points):
     ys = [p[1] for p in points]
     return min(xs), min(ys), max(xs), max(ys)
 
-def get_circle_features(entity):
+def get_circle_points(entity):
     center = entity.dxf.center
     radius = entity.dxf.radius
     return [(center[0] + radius * math.cos(a), center[1] + radius * math.sin(a)) for a in np.linspace(0, 2 * math.pi, 36)]
+
+def get_polyline_points(entity):
+    return [(v.dxf.location.x, v.dxf.location.y) for v in entity.vertices()]
 
 def vertex_angles(points):
     angles = []
@@ -86,10 +88,15 @@ def centroid(points):
 
 def extract_features(entity):
     if entity.dxftype() == 'CIRCLE':
-        points = get_circle_features(entity)
+        points = get_circle_points(entity)
     elif entity.dxftype() == 'LWPOLYLINE':
         points = [(p[0], p[1]) for p in entity.get_points()]
+    elif entity.dxftype() == 'POLYLINE':
+        points = get_polyline_points(entity)
     else:
+        return None, None
+
+    if len(points) < 3:
         return None, None
 
     area = polygon_area(points)
@@ -114,6 +121,16 @@ def extract_features(entity):
         "obtuse_angle_count": obtuse,
     }, points
 
+def apply_rule_based_label(features, predicted_label):
+    if features["num_points"] == 4:
+        if 0.9 < features["aspect_ratio"] < 1.1:
+            return "square"
+        else:
+            return "rectangle"
+    elif features["num_points"] >= 30 and features["compactness"] > 0.9:
+        return "circle"
+    return predicted_label
+
 # --- Main Script ---
 print("🔄 Loading model and scaler...")
 model = joblib.load(MODEL_PATH)
@@ -130,10 +147,14 @@ msp = doc.modelspace()
 shapes = []
 boundary = None
 
-# --- Step 1: Detect boundary and extract shapes ---
+# --- Step 1: Extract shapes and detect boundary ---
 for e in msp:
-    if e.dxftype() == "LWPOLYLINE" and e.closed:
-        pts = [(p[0], p[1]) for p in e.get_points()]
+    if e.dxftype() in ["LWPOLYLINE", "POLYLINE"] and e.closed:
+        if e.dxftype() == "LWPOLYLINE":
+            pts = [(p[0], p[1]) for p in e.get_points()]
+        else:
+            pts = get_polyline_points(e)
+
         width = max(p[0] for p in pts) - min(p[0] for p in pts)
         height = max(p[1] for p in pts) - min(p[1] for p in pts)
         if not boundary or width * height > boundary["width"] * boundary["height"]:
@@ -147,10 +168,11 @@ for e in msp:
         if features:
             shapes.append({"entity": e, "features": features, "points": points})
 
+print(f"🔍 Total shapes extracted (excluding boundary): {len(shapes)}")
 if not boundary:
     raise ValueError("❌ No rectangle boundary found!")
 
-# --- Step 2: Predict shape types ---
+# --- Step 2: ML prediction and rule correction ---
 df = pd.DataFrame([s["features"] for s in shapes])
 for col in expected_cols:
     if col not in df.columns:
@@ -161,20 +183,25 @@ df_scaled = scaler.transform(df)
 preds = model.predict(df_scaled)
 labels = encoder.inverse_transform(preds)
 
-for shape, label in zip(shapes, labels):
-    shape["label"] = label
-    print(f"🧠 Predicted shape: {label}")
+final_labels = []
+for shape, predicted in zip(shapes, labels):
+    corrected = apply_rule_based_label(shape["features"], predicted)
+    shape["label"] = corrected
+    final_labels.append(corrected)
+    print(f"🧠 Predicted shape: {predicted} -> Final: {corrected}")
+    print(shape["features"])
 
-df['predicted_label'] = labels
+df["predicted_label"] = labels
+df["final_label"] = final_labels
 df.to_csv("debug_features.csv", index=False)
 print("✅ Debug features saved at debug_features.csv")
 
-# --- Step 3: Clear all except boundary
+# --- Step 3: Clear canvas except boundary
 for e in list(msp):
     if e != boundary["entity"]:
         msp.delete_entity(e)
 
-# --- Step 4: Arrange shapes inside box using original geometry ---
+# --- Step 4: Arrange shapes inside boundary
 x_cursor = boundary["x"] + SPACING
 y_cursor = boundary["y"] + SPACING
 row_max_height = 0
@@ -190,12 +217,11 @@ for shape in shapes:
         row_max_height = 0
 
     if y_cursor + h + SPACING > boundary["y"] + boundary["height"]:
-        print("⚠️ Not enough vertical space. Skipping shape.")
+        print(f"⚠️ Skipping shape ({shape['label']}) due to space constraints.")
         continue
 
     dx = x_cursor - min_x
     dy = y_cursor - min_y
-
     new_pts = [(p[0] + dx, p[1] + dy) for p in shape["points"]]
     msp.add_lwpolyline(new_pts, close=True)
 

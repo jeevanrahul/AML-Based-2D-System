@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 # Change this to your test input
-dxf_path = "data/test case/sample_shapes_in_box.dxf"
+dxf_path = r"data\raw\shapes_inside_box\own.dxf"
 
 def distance(p1, p2):
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
