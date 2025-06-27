@@ -6,7 +6,7 @@ import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
 # --- File Paths ---
-INPUT_DXF = r"data\raw\shapes_inside_box\own.dxf"
+INPUT_DXF = r"data\raw\shapes_inside_box\sample.dxf"
 OUTPUT_DXF = r"data\output\sample_output.dxf"
 MODEL_PATH = r"models\random_forest_model.pkl"
 ENCODER_PATH = r"models\label_encoder.pkl"
