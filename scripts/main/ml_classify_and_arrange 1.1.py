@@ -5,17 +5,16 @@ import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-# --- File Paths ---
-INPUT_DXF = r"data\raw\shapes_inside_box\sample.dxf"
-OUTPUT_DXF = r"data\output\sample_output.dxf"
-MODEL_PATH = r"models\random_forest_model.pkl"
-ENCODER_PATH = r"models\label_encoder.pkl"
-SCALER_PATH = r"models\minmax_scaler.pkl"
-FEATURE_COLUMNS_PATH = r"models\feature_columns.txt"
-
+# === Config Paths ===
+INPUT_DXF = r"data/raw/shapes_inside_box/sample.dxf"
+OUTPUT_DXF = r"data/output/sample_output.dxf"
+MODEL_PATH = r"models/random_forest_model.pkl"
+ENCODER_PATH = r"models/label_encoder.pkl"
+SCALER_PATH = r"models/minmax_scaler.pkl"
+FEATURE_COLUMNS_PATH = r"models/feature_columns.txt"
 SPACING = 4  # mm
 
-# --- Geometry Utilities ---
+# === Geometry Utilities ===
 def distance(p1, p2):
     return math.hypot(p2[0] - p1[0], p2[1] - p1[1])
 
@@ -26,15 +25,11 @@ def perimeter(points):
     return sum(distance(points[i], points[(i + 1) % len(points)]) for i in range(len(points)))
 
 def aspect_ratio(points):
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    width = max(xs) - min(xs)
-    height = max(ys) - min(ys)
-    return width / height if height != 0 else 0
+    xs, ys = zip(*points)
+    return (max(xs) - min(xs)) / (max(ys) - min(ys)) if (max(ys) - min(ys)) != 0 else 0
 
 def bounding_box(points):
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
+    xs, ys = zip(*points)
     return min(xs), min(ys), max(xs), max(ys)
 
 def get_circle_points(entity):
@@ -49,21 +44,15 @@ def vertex_angles(points):
     angles = []
     n = len(points)
     for i in range(n):
-        p0 = np.array(points[i - 1])
-        p1 = np.array(points[i])
-        p2 = np.array(points[(i + 1) % n])
-        v1 = p0 - p1
-        v2 = p2 - p1
+        p0, p1, p2 = np.array(points[i - 1]), np.array(points[i]), np.array(points[(i + 1) % n])
+        v1, v2 = p0 - p1, p2 - p1
         denom = np.linalg.norm(v1) * np.linalg.norm(v2)
-        cos_angle = np.dot(v1, v2) / denom if denom != 0 else 1.0
-        cos_angle = np.clip(cos_angle, -1.0, 1.0)
+        cos_angle = np.clip(np.dot(v1, v2) / denom if denom != 0 else 1.0, -1.0, 1.0)
         angles.append(np.degrees(np.arccos(cos_angle)))
     return angles
 
 def count_acute_obtuse_angles(angles):
-    acute = sum(1 for a in angles if a < 90)
-    obtuse = sum(1 for a in angles if a > 90)
-    return acute, obtuse
+    return sum(a < 90 for a in angles), sum(a > 90 for a in angles)
 
 def is_convex(points):
     if len(points) < 4:
@@ -74,17 +63,15 @@ def is_convex(points):
         dy1 = points[(i + 1) % len(points)][1] - points[i][1]
         dx2 = points[(i + 2) % len(points)][0] - points[(i + 1) % len(points)][0]
         dy2 = points[(i + 2) % len(points)][1] - points[(i + 1) % len(points)][1]
-        cross = dx1 * dy2 - dy1 * dx2
-        signs.append(cross > 0)
+        signs.append((dx1 * dy2 - dy1 * dx2) > 0)
     return all(signs) or not any(signs)
 
-def compactness(area, perimeter):
-    return 0 if perimeter == 0 else (4 * math.pi * area) / (perimeter ** 2)
+def compactness(area, peri):
+    return (4 * math.pi * area) / (peri ** 2) if peri != 0 else 0
 
 def centroid(points):
-    xs = [p[0] for p in points]
-    ys = [p[1] for p in points]
-    return (sum(xs) / len(xs), sum(ys) / len(ys))
+    xs, ys = zip(*points)
+    return sum(xs) / len(xs), sum(ys) / len(ys)
 
 def extract_features(entity):
     if entity.dxftype() == 'CIRCLE':
@@ -121,113 +108,87 @@ def extract_features(entity):
         "obtuse_angle_count": obtuse,
     }, points
 
-def apply_rule_based_label(features, predicted_label):
+def apply_rule_based_label(features, predicted):
     if features["num_points"] == 4:
         if 0.9 < features["aspect_ratio"] < 1.1:
             return "square"
-        else:
-            return "rectangle"
-    elif features["num_points"] >= 30 and features["compactness"] > 0.9:
+        return "rectangle"
+    if features["num_points"] >= 30 and features["compactness"] > 0.9:
         return "circle"
-    return predicted_label
+    return predicted
 
-# --- Main Script ---
+# === Load Model and Scaler ===
 print("🔄 Loading model and scaler...")
 model = joblib.load(MODEL_PATH)
 encoder = joblib.load(ENCODER_PATH)
 scaler = joblib.load(SCALER_PATH)
-
-with open(FEATURE_COLUMNS_PATH, "r") as f:
+with open(FEATURE_COLUMNS_PATH) as f:
     expected_cols = [line.strip() for line in f]
 
+# === Parse DXF ===
 print("📂 Reading DXF:", INPUT_DXF)
 doc = ezdxf.readfile(INPUT_DXF)
 msp = doc.modelspace()
 
 shapes = []
 boundary = None
-
-# --- Step 1: Extract shapes and detect boundary ---
 for e in msp:
     if e.dxftype() in ["LWPOLYLINE", "POLYLINE"] and e.closed:
-        if e.dxftype() == "LWPOLYLINE":
-            pts = [(p[0], p[1]) for p in e.get_points()]
-        else:
-            pts = get_polyline_points(e)
-
-        width = max(p[0] for p in pts) - min(p[0] for p in pts)
-        height = max(p[1] for p in pts) - min(p[1] for p in pts)
+        pts = [(p[0], p[1]) for p in e.get_points()] if e.dxftype() == "LWPOLYLINE" else get_polyline_points(e)
+        width, height = max(p[0] for p in pts) - min(p[0] for p in pts), max(p[1] for p in pts) - min(p[1] for p in pts)
         if not boundary or width * height > boundary["width"] * boundary["height"]:
             boundary = {"entity": e, "x": min(p[0] for p in pts), "y": min(p[1] for p in pts), "width": width, "height": height}
         else:
-            features, points = extract_features(e)
-            if features:
-                shapes.append({"entity": e, "features": features, "points": points})
+            f, pts = extract_features(e)
+            if f: shapes.append({"entity": e, "features": f, "points": pts})
     elif e.dxftype() == "CIRCLE":
-        features, points = extract_features(e)
-        if features:
-            shapes.append({"entity": e, "features": features, "points": points})
+        f, pts = extract_features(e)
+        if f: shapes.append({"entity": e, "features": f, "points": pts})
 
-print(f"🔍 Total shapes extracted (excluding boundary): {len(shapes)}")
 if not boundary:
     raise ValueError("❌ No rectangle boundary found!")
 
-# --- Step 2: ML prediction and rule correction ---
+# === Predict and Correct Labels ===
 df = pd.DataFrame([s["features"] for s in shapes])
-for col in expected_cols:
-    if col not in df.columns:
-        df[col] = 0
-df = df[expected_cols]
-
+df = df.reindex(columns=expected_cols, fill_value=0)
 df_scaled = scaler.transform(df)
 preds = model.predict(df_scaled)
 labels = encoder.inverse_transform(preds)
-
 final_labels = []
-for shape, predicted in zip(shapes, labels):
-    corrected = apply_rule_based_label(shape["features"], predicted)
-    shape["label"] = corrected
+for s, pred in zip(shapes, labels):
+    corrected = apply_rule_based_label(s["features"], pred)
+    s["label"] = corrected
     final_labels.append(corrected)
-    print(f"🧠 Predicted shape: {predicted} -> Final: {corrected}")
-    print(shape["features"])
+    print(f"🧠 Predicted: {pred} → Final: {corrected}")
 
 df["predicted_label"] = labels
 df["final_label"] = final_labels
 df.to_csv("debug_features.csv", index=False)
-print("✅ Debug features saved at debug_features.csv")
 
-# --- Step 3: Clear canvas except boundary
+# === Clear Existing Shapes ===
 for e in list(msp):
     if e != boundary["entity"]:
         msp.delete_entity(e)
 
-# --- Step 4: Arrange shapes inside boundary
-x_cursor = boundary["x"] + SPACING
-y_cursor = boundary["y"] + SPACING
+# === Arrange Inside Rectangle ===
+x_cursor, y_cursor = boundary["x"] + SPACING, boundary["y"] + SPACING
 row_max_height = 0
-
 for shape in shapes:
     min_x, min_y, max_x, max_y = bounding_box(shape["points"])
-    w = max_x - min_x
-    h = max_y - min_y
-
+    w, h = max_x - min_x, max_y - min_y
     if x_cursor + w + SPACING > boundary["x"] + boundary["width"]:
         x_cursor = boundary["x"] + SPACING
         y_cursor += row_max_height + SPACING
         row_max_height = 0
-
     if y_cursor + h + SPACING > boundary["y"] + boundary["height"]:
         print(f"⚠️ Skipping shape ({shape['label']}) due to space constraints.")
         continue
-
-    dx = x_cursor - min_x
-    dy = y_cursor - min_y
+    dx, dy = x_cursor - min_x, y_cursor - min_y
     new_pts = [(p[0] + dx, p[1] + dy) for p in shape["points"]]
     msp.add_lwpolyline(new_pts, close=True)
-
     x_cursor += w + SPACING
     row_max_height = max(row_max_height, h)
 
-# --- Step 5: Save output ---
+# === Save Output ===
 doc.saveas(OUTPUT_DXF)
 print("✅ Done! Saved arranged file to:", OUTPUT_DXF)
